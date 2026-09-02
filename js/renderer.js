@@ -108,6 +108,72 @@ export class Renderer {
     this.cam.y -= dy / this.cam.scale;
   }
 
+  fitToLive(grid, pad = 6) {
+    const live = grid.liveCells();
+    if (!live.length) {
+      this.fit(grid);
+      return;
+    }
+    let minX = grid.w;
+    let minY = grid.h;
+    let maxX = 0;
+    let maxY = 0;
+    for (const [x, y] of live) {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX = Math.min(grid.w - 1, maxX + pad);
+    maxY = Math.min(grid.h - 1, maxY + pad);
+    const bw = maxX - minX + 1;
+    const bh = maxY - minY + 1;
+    const cssW = Math.max(1, this.canvas.clientWidth || this.canvas.width);
+    const cssH = Math.max(1, this.canvas.clientHeight || this.canvas.height);
+    this.cam.scale = Math.max(2, Math.min(cssW / bw, cssH / bh));
+    this.cam.x = minX - (cssW / this.cam.scale - bw) / 2;
+    this.cam.y = minY - (cssH / this.cam.scale - bh) / 2;
+  }
+
+  exportPng() {
+    return this.canvas.toDataURL("image/png");
+  }
+
+  drawMinimap(grid, mini) {
+    if (!mini) return;
+    const ctx = mini.getContext("2d");
+    const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
+    const cssW = Math.max(80, mini.clientWidth || 120);
+    const cssH = Math.max(48, mini.clientHeight || 72);
+    if (mini.width !== Math.floor(cssW * dpr) || mini.height !== Math.floor(cssH * dpr)) {
+      mini.width = Math.floor(cssW * dpr);
+      mini.height = Math.floor(cssH * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = this.theme.void;
+    ctx.fillRect(0, 0, cssW, cssH);
+    const sx = cssW / grid.w;
+    const sy = cssH / grid.h;
+    ctx.fillStyle = this.theme.mid;
+    const { w, cells } = grid;
+    for (let i = 0; i < cells.length; i += 1) {
+      if (!cells[i]) continue;
+      const x = i % w;
+      const y = (i / w) | 0;
+      ctx.fillRect(x * sx, y * sy, Math.max(1, sx), Math.max(1, sy));
+    }
+    ctx.strokeStyle = this.theme.spark;
+    ctx.lineWidth = 1;
+    const vx = -this.cam.x * sx;
+    const vy = -this.cam.y * sy;
+    const board = this.canvas;
+    const vw = ((board.clientWidth || 320) / this.cam.scale) * sx;
+    const vh = ((board.clientHeight || 320) / this.cam.scale) * sy;
+    ctx.strokeRect(vx, vy, vw, vh);
+  }
+
   resize() {
     const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
     this.dpr = dpr;

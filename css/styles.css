@@ -281,7 +281,8 @@ kbd {
 }
 
 #play-screen[data-mode="challenge"] .play-main,
-#play-screen[data-mode="daily"] .play-main {
+#play-screen[data-mode="daily"] .play-main,
+#play-screen[data-mode="quiz"] .play-main {
   grid-template-columns: minmax(0, 1fr) 17rem;
 }
 
@@ -376,10 +377,43 @@ kbd {
 
 .stage-col {
   display: grid;
-  grid-template-rows: minmax(320px, 1fr) 44px auto;
+  grid-template-rows: minmax(320px, 1fr) 44px auto auto;
   min-width: 0;
   min-height: 320px;
+  position: relative;
 }
+
+#mini {
+  position: absolute;
+  right: 0.55rem;
+  top: 0.55rem;
+  width: 132px;
+  height: 80px;
+  border: 1px solid var(--line);
+  background: #050b14;
+  pointer-events: none;
+  border-radius: 0.3rem;
+}
+
+.tape-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.75rem 0.15rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.tape-wrap input { flex: 1; }
+
+.quiz-choices {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.quiz-choices button.ok { border-color: var(--lime); color: var(--lime); }
+.quiz-choices button.bad { border-color: var(--magenta); color: var(--magenta); }
 
 #board {
   width: 100%;

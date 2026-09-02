@@ -7,6 +7,7 @@ import * as audio from "./audio.js";
 import { Renderer, THEMES } from "./renderer.js";
 import { bindInput, isTypingTarget } from "./input.js";
 import { ACHIEVEMENTS, starTotal, isUnlocked, maybeCampaignMedals } from "./achievements.js";
+import { makeQuiz, quizChoices, placeQuizPattern, gradeQuiz, quizDone, QUIZ_ROUNDS } from "./quiz.js";
 
 const SPEEDS = [1, 2, 3, 5, 8, 12, 16, 24, 30, 45, 60];
 const UNDO_LIMIT = 48;
@@ -35,6 +36,12 @@ const state = {
   panMode: false,
   painted: 0,
   gunGens: 0,
+  quiz: null,
+  quizRng: null,
+  tape: [],
+  tapeLive: true,
+  t0: 0,
+  elapsed: 0,
 };
 
 const undo = [];
@@ -59,6 +66,7 @@ function init() {
   els.medals = $("overlay-medals");
   els.dailyEnd = $("overlay-daily-end");
   els.keys = $("overlay-keys");
+  els.quizEnd = $("overlay-quiz-end");
   els.toast = $("toast");
   els.board = $("board");
   renderer = new Renderer(els.board, $("spark"));
@@ -174,6 +182,10 @@ function bindUi() {
   $("btn-howto").addEventListener("click", () => showOverlay("howto"));
   $("btn-howto-close").addEventListener("click", () => hideOverlay());
   $("btn-medals").addEventListener("click", () => openMedals());
+  $("btn-quiz").addEventListener("click", () => openQuiz());
+  $("btn-quiz-next").addEventListener("click", nextQuizRound);
+  $("btn-quiz-again").addEventListener("click", () => { hideOverlay(); openQuiz(); });
+  $("btn-quiz-title").addEventListener("click", () => { hideOverlay(); goTitle(); });
   $("btn-medals-close").addEventListener("click", () => hideOverlay());
   $("btn-campaign-close").addEventListener("click", () => hideOverlay());
   $("btn-keys-close").addEventListener("click", () => hideOverlay());
@@ -201,6 +213,12 @@ function bindUi() {
     store.setSettings({ brush: Number(e.target.value) || 1 });
   });
   $("btn-rle").addEventListener("click", copyRle);
+  $("btn-png").addEventListener("click", savePng);
+  $("btn-fit").addEventListener("click", () => {
+    renderer.fitToLive(state.grid);
+    hudDirty = true;
+  });
+  $("rng-tape").addEventListener("input", (e) => scrubTape(Number(e.target.value)));
   $("btn-clear-progress").addEventListener("click", () => {
     if (confirm("Erase challenge stars, daily scores, and achievements?")) {
       store.clearProgress();
@@ -256,6 +274,8 @@ function bindUi() {
     if (state.won) return;
     pushUndo();
     resetRunStats(false);
+    state.t0 = performance.now();
+    state.elapsed = 0;
     setRunning(true);
   });
   $("btn-reset").addEventListener("click", () => {
@@ -296,7 +316,7 @@ function sizeH(w) {
 
 function canEdit() {
   if (state.overlay) return false;
-  if (state.mode === "daily") return false;
+  if (state.mode === "daily" || state.mode === "quiz") return false;
   if (state.mode === "challenge") {
     if (state.won || state.failed) return false;
     if (state.challenge?.keepAlive) return true;
@@ -486,7 +506,15 @@ function setRunning(on) {
   if (state.won && on) return;
   if (state.failed && on) return;
   if (state.overlay && on) return;
+  if (on && !state.tapeLive && state.tape.length) {
+    const last = state.tape[state.tape.length - 1];
+    state.grid.restore(last.snap);
+    state.gen = last.gen;
+    state.pop = last.pop;
+    state.tapeLive = true;
+  }
   state.running = Boolean(on);
+  if (on && !state.t0) state.t0 = performance.now();
   if (on && state.hashes.size === 0) state.hashes.set(hashGrid(state.grid), state.gen);
   hudDirty = true;
 }
@@ -499,9 +527,14 @@ function resetRunStats(clearHashes = true) {
   state.failed = false;
   state.dailyDone = false;
   state.cycleAt = -1;
+  state.tape = [];
+  state.tapeLive = true;
+  state.t0 = 0;
+  state.elapsed = 0;
   if (clearHashes) state.hashes = new Map([[hashGrid(state.grid), 0]]);
   renderer.clearHistory();
   renderer.pushPop(state.pop);
+  pushTape();
   hudDirty = true;
 }
 
@@ -529,6 +562,7 @@ function doStep() {
   if (state.mode === "challenge" && state.challenge) tickChallenge(cycled);
   else if (state.mode === "daily") tickDaily(cycled);
 
+  if (state.tapeLive) pushTape();
   hudDirty = true;
 }
 
@@ -810,6 +844,7 @@ function showPlay() {
   const sandbox = state.mode === "sandbox";
   const challenge = state.mode === "challenge";
   const daily = state.mode === "daily";
+  const quiz = state.mode === "quiz";
   els.play.dataset.mode = state.mode;
   $("sandbox-tools").classList.toggle("hidden", !sandbox);
   $("stamps-wrap").classList.toggle("hidden", !sandbox);
@@ -818,9 +853,12 @@ function showPlay() {
   $("mission").classList.toggle("hidden", !challenge);
   $("challenge-list").classList.toggle("hidden", !challenge);
   $("daily-panel").classList.toggle("hidden", !daily);
+  $("quiz-panel").classList.toggle("hidden", !quiz);
+  $("tape-wrap").classList.toggle("hidden", quiz);
+  $("mini").classList.toggle("hidden", quiz);
   $("btn-reseed").classList.toggle("hidden", !sandbox);
   $("btn-share").classList.toggle("hidden", !sandbox);
-  $("btn-clear").disabled = daily;
+  $("btn-clear").disabled = daily || quiz;
   hudDirty = true;
   updateChrome();
   requestAnimationFrame(() => {
@@ -852,6 +890,7 @@ function showOverlay(name) {
     medals: els.medals,
     "daily-end": els.dailyEnd,
     keys: els.keys,
+    "quiz-end": els.quizEnd,
   };
   for (const [key, node] of Object.entries(map)) {
     node.classList.toggle("hidden", key !== name);
@@ -860,7 +899,7 @@ function showOverlay(name) {
 
 function hideOverlay() {
   state.overlay = null;
-  for (const node of [els.howto, els.pause, els.success, els.fail, els.campaign, els.medals, els.dailyEnd, els.keys]) {
+  for (const node of [els.howto, els.pause, els.success, els.fail, els.campaign, els.medals, els.dailyEnd, els.keys, els.quizEnd]) {
     node.classList.add("hidden");
   }
 }
@@ -891,14 +930,130 @@ function updateChrome() {
     scoreEl.classList.remove("hidden");
     scoreEl.innerHTML = `score <em>${scoreDaily(state.peak, state.gen)}</em>`;
   } else scoreEl.classList.add("hidden");
+  const timeEl = $("hud-time");
+  if (state.mode === "challenge") {
+    timeEl.classList.remove("hidden");
+    timeEl.innerHTML = `time <em>${state.elapsed.toFixed(1)}s</em>`;
+  } else timeEl.classList.add("hidden");
+  const quizEl = $("hud-quiz");
+  if (state.mode === "quiz" && state.quiz) {
+    quizEl.classList.remove("hidden");
+    quizEl.innerHTML = `quiz <em>${state.quiz.score}/${QUIZ_ROUNDS}</em>`;
+  } else quizEl.classList.add("hidden");
   $("btn-play").classList.toggle("hidden", state.running);
   $("btn-pause").classList.toggle("hidden", !state.running);
+}
+
+const TAPE_LIMIT = 160;
+
+function pushTape() {
+  state.tape.push({ snap: state.grid.snapshot(), gen: state.gen, pop: state.pop });
+  if (state.tape.length > TAPE_LIMIT) state.tape.shift();
+  const sl = $("rng-tape");
+  sl.max = String(Math.max(0, state.tape.length - 1));
+  sl.value = String(Math.max(0, state.tape.length - 1));
+  $("tape-out").textContent = "live";
+}
+
+function scrubTape(i) {
+  const frame = state.tape[i];
+  if (!frame) return;
+  state.running = false;
+  state.tapeLive = i >= state.tape.length - 1;
+  state.grid.restore(frame.snap);
+  state.gen = frame.gen;
+  state.pop = frame.pop;
+  $("tape-out").textContent = state.tapeLive ? "live" : `gen ${frame.gen}`;
+  hudDirty = true;
+}
+
+function savePng() {
+  renderer.draw(state.grid);
+  const a = document.createElement("a");
+  a.href = renderer.exportPng();
+  a.download = `life-gen-${state.gen}.png`;
+  a.click();
+  toast("PNG saved");
+}
+
+function openQuiz() {
+  state.mode = "quiz";
+  state.screen = "play";
+  state.challenge = null;
+  state.rule = Rule.CONWAY;
+  state.quiz = makeQuiz(Date.now());
+  state.quizRng = new Rng(state.quiz.seed);
+  state.grid = new Grid(48, 32, true);
+  renderer.target = null;
+  hideOverlay();
+  showPlay();
+  renderQuizRound();
+}
+
+function renderQuizRound() {
+  const q = state.quiz;
+  const id = q.order[q.index];
+  placeQuizPattern(state.grid, id);
+  resetRunStats();
+  renderer.fitToLive(state.grid, 8);
+  q.answered = false;
+  $("quiz-round").textContent = `Round ${q.index + 1} / ${QUIZ_ROUNDS}`;
+  $("quiz-score").textContent = `Score ${q.score}`;
+  $("quiz-feedback").textContent = "What is this pattern?";
+  $("btn-quiz-next").classList.add("hidden");
+  const choices = quizChoices(q, state.quizRng);
+  const root = $("quiz-choices");
+  root.innerHTML = "";
+  for (const name of choices) {
+    const btn = document.createElement("button");
+    btn.textContent = name;
+    btn.addEventListener("click", () => answerQuiz(name, btn));
+    root.append(btn);
+  }
+  setRunning(true);
+  hudDirty = true;
+}
+
+function answerQuiz(name, btn) {
+  const q = state.quiz;
+  if (!q || q.answered) return;
+  q.answered = true;
+  const { ok, answer } = gradeQuiz(q, name);
+  if (ok) q.score += 1;
+  btn.classList.add(ok ? "ok" : "bad");
+  for (const b of $("quiz-choices").querySelectorAll("button")) {
+    if (b.textContent === answer) b.classList.add("ok");
+    b.disabled = true;
+  }
+  $("quiz-feedback").textContent = ok ? "Yes." : `It was ${answer}.`;
+  $("quiz-score").textContent = `Score ${q.score}`;
+  $("btn-quiz-next").classList.remove("hidden");
+  hudDirty = true;
+}
+
+function nextQuizRound() {
+  state.quiz.index += 1;
+  if (quizDone(state.quiz)) finishQuiz();
+  else renderQuizRound();
+}
+
+function finishQuiz() {
+  state.running = false;
+  const s = state.quiz.score;
+  if (s >= 6 && store.unlockAchievement("quiz-pass")) toast("Medal: Naturalist");
+  if (s === QUIZ_ROUNDS && store.unlockAchievement("quiz-ace")) toast("Medal: Taxonomist");
+  $("quiz-end-score").textContent = `${s} / ${QUIZ_ROUNDS}`;
+  $("quiz-end-copy").textContent =
+    s === QUIZ_ROUNDS ? "Taxonomist." : s >= 6 ? "Naturalist." : "Study the stamps and try again.";
+  showOverlay("quiz-end");
+  refreshTitle();
 }
 
 function loop(ts) {
   if (!lastTs) lastTs = ts;
   const dt = Math.min(64, ts - lastTs);
   lastTs = ts;
+  if (state.running && state.t0) state.elapsed = (ts - state.t0) / 1000;
   if (state.running && state.screen === "play" && !state.overlay) {
     acc += dt;
     const interval = 1000 / Math.max(1, state.speed);
@@ -913,7 +1068,8 @@ function loop(ts) {
   } else acc = 0;
   if (state.screen === "play") {
     renderer.draw(state.grid);
-    if (hudDirty) {
+    if (!$("mini").classList.contains("hidden")) renderer.drawMinimap(state.grid, $("mini"));
+    if (hudDirty || state.mode === "challenge") {
       updateChrome();
       hudDirty = false;
     }

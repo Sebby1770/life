@@ -14,6 +14,7 @@ const SHELL = [
   "./js/renderer.js",
   "./js/input.js",
   "./js/achievements.js",
+  "./js/quiz.js",
   "./favicon.svg",
   "./public/hero.jpg",
   "./public/glider.jpg",

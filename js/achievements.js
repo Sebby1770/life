@@ -10,6 +10,8 @@ export const ACHIEVEMENTS = [
   { id: "daily", name: "Daily bread", hint: "Finish a daily soup." },
   { id: "gunner", name: "Gunner", hint: "Let a Gosper gun run 80 generations." },
   { id: "painter", name: "Painter", hint: "Lay 40 cells in one sandbox sitting." },
+  { id: "quiz-pass", name: "Naturalist", hint: "Score 6/8 on Identify." },
+  { id: "quiz-ace", name: "Taxonomist", hint: "Score 8/8 on Identify." },
 ];
 
 export function starTotal(records, challenges) {

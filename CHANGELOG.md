@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- **Identify** — name-that-pattern quiz (8 rounds, medals at 6/8 and 8/8).
+- Generation **tape** — scrub the last 160 frames.
+- Minimap, fit-to-life camera, save PNG of the board.
+- Challenge run timer in the HUD.
+
 ## 1.1.0
 
 - Campaign picker with sequential unlocks and a star total on the title screen.

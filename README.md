@@ -34,7 +34,9 @@ Cells live and die by **B3/S23**: a dead cell with three neighbors is born; a li
 2. **Sandbox** — playground with stamps, wrap, speed, undo, themes, age-heat, brush, RLE, share links (`location.hash`).
 3. **Challenges** — ten puzzles with sequential unlocks, budgets, hints, and stars.
 4. **Daily** — a 40×24 soup (density 0.32) seeded from today's date. Score = peak population × 10 + generations lived, capped at 400.
-5. **Medals** — first pulse, campaign, perfect 30, daily, gunner, painter.
+5. **Medals** — first pulse, campaign, perfect 30, daily, gunner, painter, naturalist, taxonomist.
+6. **Identify** — eight rounds of name-that-pattern.
+7. **Tape** — scrub the last 160 generations. Minimap and Save PNG in sandbox.
 
 ### Campaign
 

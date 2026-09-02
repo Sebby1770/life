@@ -36,6 +36,7 @@
             <button id="btn-daily">Daily</button>
             <button id="btn-howto">How to Play</button>
             <button id="btn-medals">Medals</button>
+            <button id="btn-quiz">Identify</button>
           </div>
           <p class="credit">Once gol-rs, a terminal toy. Now a game. Press <kbd>?</kbd> for keys.</p>
         </div>
@@ -52,6 +53,8 @@
           <b>spd <em id="hud-speed">12 Hz</em></b>
           <b id="hud-budget" class="hidden">budget <em>0</em></b>
           <b id="hud-score" class="hidden">score <em>0</em></b>
+          <b id="hud-time" class="hidden">time <em>0.0s</em></b>
+          <b id="hud-quiz" class="hidden">quiz <em>0/8</em></b>
         </div>
         <button class="ghost" id="btn-settings">Settings</button>
       </header>
@@ -80,6 +83,8 @@
             </label>
             <button id="btn-share">Copy share link</button>
             <button id="btn-rle">Copy RLE</button>
+            <button id="btn-png">Save PNG</button>
+            <button id="btn-fit">Fit life</button>
             <label>Brush
               <select id="sel-brush">
                 <option value="1">dot</option>
@@ -90,7 +95,12 @@
         </aside>
         <div class="stage-col">
           <canvas id="board" width="800" height="480" aria-label="Life board"></canvas>
+          <canvas id="mini" width="160" height="96" aria-label="Minimap"></canvas>
           <canvas id="spark" width="800" height="44" aria-hidden="true"></canvas>
+          <label class="tape-wrap hidden" id="tape-wrap">Tape
+            <input id="rng-tape" type="range" min="0" max="0" value="0" />
+            <output id="tape-out">live</output>
+          </label>
           <div class="transport">
             <button class="primary" id="btn-play">Play</button>
             <button class="primary hidden" id="btn-pause">Pause</button>
@@ -117,6 +127,14 @@
             </div>
           </div>
           <div id="challenge-list" class="challenge-list hidden"></div>
+          <div id="quiz-panel" class="quiz-panel hidden">
+            <h2>Identify</h2>
+            <p class="flavor" id="quiz-round">Round 1 / 8</p>
+            <p class="flavor" id="quiz-score">Score 0</p>
+            <div id="quiz-choices" class="quiz-choices"></div>
+            <p class="flavor" id="quiz-feedback"></p>
+            <button class="primary hidden" id="btn-quiz-next">Next</button>
+          </div>
           <div id="daily-panel" class="daily-panel hidden">
             <h2>Daily soup</h2>
             <p class="date" id="daily-date">—</p>
@@ -220,6 +238,18 @@
         <div class="sheet-actions">
           <button class="primary" id="btn-daily-end-close">Stay</button>
           <button id="btn-daily-share">Copy score</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-quiz-end" class="overlay hidden" role="dialog">
+      <div class="sheet">
+        <h2>Identify complete</h2>
+        <p class="score-big" id="quiz-end-score">0 / 8</p>
+        <p id="quiz-end-copy">Naturalist.</p>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-quiz-again">Again</button>
+          <button id="btn-quiz-title">Title</button>
         </div>
       </div>
     </div>
