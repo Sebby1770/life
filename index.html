@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050b14" />
+    <title>Life — a game of cells</title>
+    <meta name="description" content="Life is a browser game of cells. Paint, survive challenges, and chase a daily soup score." />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@500;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#board">Skip to board</a>
+
+    <section id="title-screen" class="screen">
+      <div class="hero">
+        <img class="hero-img" src="./public/hero.jpg" alt="" />
+        <div class="hero-shade"></div>
+        <div class="hero-content">
+          <img class="brand-mark" src="./public/glider.jpg" alt="Glider mark" />
+          <p class="eyebrow">cellular arcade</p>
+          <h1 class="wordmark">Life</h1>
+          <p class="tagline">A game of cells</p>
+          <div class="title-actions">
+            <button class="primary" id="btn-sandbox">Sandbox</button>
+            <button class="primary" id="btn-challenges">Challenges</button>
+            <button id="btn-daily">Daily</button>
+            <button id="btn-howto">How to Play</button>
+          </div>
+          <p class="credit">Once gol-rs, a terminal toy. Now a game.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="play-screen" class="screen hidden">
+      <header class="play-top">
+        <button class="ghost" id="btn-menu" title="Menu">← Menu</button>
+        <div class="word">Life</div>
+        <div class="hud" aria-live="polite">
+          <b>gen <em id="hud-gen">0</em></b>
+          <b>pop <em id="hud-pop">0</em></b>
+          <b>spd <em id="hud-speed">12 Hz</em></b>
+          <b id="hud-budget" class="hidden">budget <em>0</em></b>
+          <b id="hud-score" class="hidden">score <em>0</em></b>
+        </div>
+        <button class="ghost" id="btn-settings">Settings</button>
+      </header>
+      <div class="play-main">
+        <aside class="rail" id="rail-left">
+          <div id="stamps-wrap">
+            <h2>Stamps</h2>
+            <div id="stamps" class="stamps"></div>
+          </div>
+          <div id="sandbox-tools" class="tools">
+            <h2>World</h2>
+            <label>Rule
+              <select id="sel-rule">
+                <option value="conway">Conway B3/S23</option>
+                <option value="highlife">HighLife B36/S23</option>
+                <option value="seeds">Seeds B2/S</option>
+                <option value="daynight">Day &amp; Night</option>
+              </select>
+            </label>
+            <div class="toggle-row">
+              <span>Wrap</span>
+              <input id="chk-wrap" type="checkbox" checked />
+            </div>
+            <label>Size <span id="size-label">80×48</span>
+              <input id="rng-size" type="range" min="40" max="160" step="8" value="80" />
+            </label>
+            <button id="btn-share">Copy share link</button>
+          </div>
+        </aside>
+        <div class="stage-col">
+          <canvas id="board" width="800" height="480" aria-label="Life board"></canvas>
+          <canvas id="spark" width="800" height="44" aria-hidden="true"></canvas>
+          <div class="transport">
+            <button class="primary" id="btn-play">Play</button>
+            <button class="primary hidden" id="btn-pause">Pause</button>
+            <button id="btn-step">Step</button>
+            <button id="btn-clear">Clear</button>
+            <button id="btn-reseed">Reseed</button>
+            <button id="btn-undo">Undo</button>
+            <button id="btn-pan">Pan</button>
+            <label class="speed-wrap">Speed
+              <input id="rng-speed" type="range" min="1" max="60" value="12" />
+            </label>
+          </div>
+        </div>
+        <aside class="rail" id="rail-right">
+          <div id="mission" class="mission hidden">
+            <p class="kicker" id="mission-kicker">Challenge</p>
+            <h3 id="mission-title">Spark</h3>
+            <div class="stars" id="mission-stars">☆☆☆</div>
+            <p class="flavor" id="mission-flavor"></p>
+            <div class="mission-actions">
+              <button class="primary" id="btn-run">Run</button>
+              <button id="btn-reset">Reset</button>
+              <button id="btn-hint">Hint</button>
+            </div>
+          </div>
+          <div id="challenge-list" class="challenge-list hidden"></div>
+          <div id="daily-panel" class="daily-panel hidden">
+            <h2>Daily soup</h2>
+            <p class="date" id="daily-date">—</p>
+            <p class="score-big" id="daily-score">—</p>
+            <p id="daily-best">No score yet</p>
+            <p class="flavor" id="daily-reason">40×24 · density 0.32</p>
+            <button class="primary" id="btn-daily-go">Go</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <div id="overlay-howto" class="overlay hidden" role="dialog" aria-labelledby="howto-title">
+      <div class="sheet">
+        <h2 id="howto-title">How to Play</h2>
+        <p>Paint cells on the void. They live and die by <strong>B3/S23</strong>: a dead cell with three neighbors is born; a live cell with two or three stays; everyone else dies.</p>
+        <ul>
+          <li>Drag to paint. Shift or right-drag to erase. Touch works.</li>
+          <li>Challenges give you a budget — only that many live cells before you hit Run.</li>
+          <li>Space pauses. <kbd>.</kbd> steps one generation. <kbd>U</kbd> undoes. <kbd>N</kbd> cycles stamps. <kbd>[</kbd> <kbd>]</kbd> change speed.</li>
+          <li>Space-drag or middle-drag pans. Wheel zooms. Esc opens settings.</li>
+        </ul>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-howto-close">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-pause" class="overlay hidden" role="dialog" aria-labelledby="pause-title">
+      <div class="sheet">
+        <h2 id="pause-title">Paused</h2>
+        <p>Mute the ticks, calm the glow, or wipe your stars.</p>
+        <div class="toggle-row"><span>Mute audio</span><input id="chk-mute" type="checkbox" /></div>
+        <div class="toggle-row"><span>Reduced motion</span><input id="chk-motion" type="checkbox" /></div>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-resume">Resume</button>
+          <button id="btn-howto-from-pause">How to Play</button>
+          <button id="btn-title">Title</button>
+          <button id="btn-clear-progress">Clear progress…</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-success" class="overlay hidden" role="dialog">
+      <div class="sheet">
+        <h2 id="success-title">Alive</h2>
+        <div class="success-stars" id="success-stars">★★★</div>
+        <p id="success-copy">It lives.</p>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-next">Next challenge</button>
+          <button id="btn-success-close">Stay</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-fail" class="overlay hidden" role="dialog">
+      <div class="sheet">
+        <h2>Not this time</h2>
+        <p id="fail-copy">The pattern fizzled.</p>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-fail-close">Try again</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
