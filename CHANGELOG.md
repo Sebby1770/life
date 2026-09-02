@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- Campaign picker with sequential unlocks and a star total on the title screen.
+- Medals (achievements) for first win, campaign, perfect 30, daily, gunner, painter.
+- Themes: lime, fire, ocean, mono. Age-heat toggle. Dot / plus brush.
+- Copy RLE. Daily recap overlay with score copy. Keyboard help (`?`).
+- Installable shell (manifest + service worker).
+
 ## 1.0.0
 
 - First release of **Life** as a browser game (replaces the gol-rs terminal toy).

@@ -1,11 +1,12 @@
-import { Grid, Rule, Rng, hashGrid, applyRle, applyCellList, parseShareHash, shareHash, parseRule } from "./engine.js";
+import { Grid, Rule, Rng, hashGrid, applyRle, applyCellList, parseShareHash, shareHash, parseRule, encodeRle } from "./engine.js";
 import { ARTS, STAMP_IDS, STAMP_META, artSize, cellsFromArt, placeStamp, placeStampCentered, nextStampId } from "./patterns.js";
 import { CHALLENGES, challengeById, checkRun, awardStars, gardenTarget, createChallengeGrid, seedKeepAlive } from "./challenges.js";
 import { todayISO, makeDailySoup, scoreDaily, DAILY_MAX_GENS } from "./daily.js";
 import * as store from "./storage.js";
 import * as audio from "./audio.js";
-import { Renderer } from "./renderer.js";
+import { Renderer, THEMES } from "./renderer.js";
 import { bindInput, isTypingTarget } from "./input.js";
+import { ACHIEVEMENTS, starTotal, isUnlocked, maybeCampaignMedals } from "./achievements.js";
 
 const SPEEDS = [1, 2, 3, 5, 8, 12, 16, 24, 30, 45, 60];
 const UNDO_LIMIT = 48;
@@ -32,6 +33,8 @@ const state = {
   dailyIso: todayISO(),
   dailyDone: false,
   panMode: false,
+  painted: 0,
+  gunGens: 0,
 };
 
 const undo = [];
@@ -52,14 +55,23 @@ function init() {
   els.pause = $("overlay-pause");
   els.success = $("overlay-success");
   els.fail = $("overlay-fail");
+  els.campaign = $("overlay-campaign");
+  els.medals = $("overlay-medals");
+  els.dailyEnd = $("overlay-daily-end");
+  els.keys = $("overlay-keys");
   els.toast = $("toast");
   els.board = $("board");
   renderer = new Renderer(els.board, $("spark"));
   const settings = store.getSettings();
   audio.setMuted(settings.mute);
   renderer.setReducedMotion(settings.reducedMotion);
+  applyTheme(settings.theme);
+  renderer.setAgeHeat(settings.ageHeat !== false);
   $("chk-mute").checked = settings.mute;
   $("chk-motion").checked = settings.reducedMotion;
+  $("chk-age").checked = settings.ageHeat !== false;
+  $("sel-theme").value = settings.theme || "lime";
+  $("sel-brush").value = String(settings.brush || 1);
 
   buildStamps();
   buildChallenges();
@@ -90,9 +102,17 @@ function init() {
   });
 
   loadShareIfAny();
+  refreshTitle();
   updateChrome();
   renderer.resetCamera(state.grid);
+  if (!store.getSettings().seenHowto) {
+    showOverlay("howto");
+    store.setSettings({ seenHowto: true });
+  }
   requestAnimationFrame(loop);
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
 }
 
 function buildStamps() {
@@ -149,10 +169,16 @@ function starText(n) {
 
 function bindUi() {
   $("btn-sandbox").addEventListener("click", () => openSandbox());
-  $("btn-challenges").addEventListener("click", () => openChallenges());
+  $("btn-challenges").addEventListener("click", () => openCampaign());
   $("btn-daily").addEventListener("click", () => openDaily());
   $("btn-howto").addEventListener("click", () => showOverlay("howto"));
   $("btn-howto-close").addEventListener("click", () => hideOverlay());
+  $("btn-medals").addEventListener("click", () => openMedals());
+  $("btn-medals-close").addEventListener("click", () => hideOverlay());
+  $("btn-campaign-close").addEventListener("click", () => hideOverlay());
+  $("btn-keys-close").addEventListener("click", () => hideOverlay());
+  $("btn-daily-end-close").addEventListener("click", () => hideOverlay());
+  $("btn-daily-share").addEventListener("click", copyDailyScore);
   $("btn-menu").addEventListener("click", () => showOverlay("pause"));
   $("btn-settings").addEventListener("click", () => showOverlay("pause"));
   $("btn-resume").addEventListener("click", () => hideOverlay());
@@ -166,6 +192,15 @@ function bindUi() {
     store.setSettings({ reducedMotion: e.target.checked });
     renderer.setReducedMotion(e.target.checked);
   });
+  $("chk-age").addEventListener("change", (e) => {
+    store.setSettings({ ageHeat: e.target.checked });
+    renderer.setAgeHeat(e.target.checked);
+  });
+  $("sel-theme").addEventListener("change", (e) => applyTheme(e.target.value));
+  $("sel-brush").addEventListener("change", (e) => {
+    store.setSettings({ brush: Number(e.target.value) || 1 });
+  });
+  $("btn-rle").addEventListener("click", copyRle);
   $("btn-clear-progress").addEventListener("click", () => {
     if (confirm("Erase challenge stars, daily scores, and achievements?")) {
       store.clearProgress();
@@ -235,7 +270,7 @@ function bindUi() {
     const i = CHALLENGES.findIndex((c) => c.id === state.challenge?.id);
     const next = CHALLENGES[i + 1];
     if (next) openChallenge(next.id);
-    else openChallenges();
+    else openCampaign();
   });
   $("btn-success-close").addEventListener("click", hideOverlay);
   $("btn-fail-close").addEventListener("click", () => {
@@ -305,10 +340,26 @@ function onPaint(ev, erase, moving) {
   }
 
   const nextAlive = !erase;
-  if (state.mode === "challenge" && nextAlive && !state.grid.get(x, y)) {
-    if (overBudget(state.grid.population() + 1)) return;
+  const brush = state.mode === "sandbox" ? (store.getSettings().brush || 1) : 1;
+  const radius = brush > 1 ? 1 : 0;
+  let added = 0;
+  const cells = [];
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      if (radius && Math.abs(dx) + Math.abs(dy) > radius) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!state.grid.inBounds(nx, ny)) continue;
+      cells.push([nx, ny]);
+      if (nextAlive && !state.grid.get(nx, ny)) added += 1;
+    }
   }
-  state.grid.set(x, y, nextAlive);
+  if (state.mode === "challenge" && nextAlive && overBudget(state.grid.population() + added)) return;
+  for (const [nx, ny] of cells) state.grid.set(nx, ny, nextAlive);
+  if (state.mode === "sandbox" && nextAlive) {
+    state.painted += added;
+    if (state.painted >= 40 && store.unlockAchievement("painter")) toast("Medal: Painter");
+  }
   state.pop = state.grid.population();
   hudDirty = true;
 }
@@ -372,6 +423,24 @@ function onKey(ev) {
   if (key === "u" || key === "U") {
     doUndo();
     return;
+  }
+  if (key === "?" || (key === "/" && ev.shiftKey)) {
+    ev.preventDefault();
+    showOverlay("keys");
+    return;
+  }
+  if (key === "t" || key === "T") {
+    const ids = Object.keys(THEMES);
+    const i = ids.indexOf(store.getSettings().theme || "lime");
+    applyTheme(ids[(i + 1) % ids.length]);
+    $("sel-theme").value = store.getSettings().theme;
+    toast(`Theme: ${store.getSettings().theme}`);
+    return;
+  }
+  if (key === "1" || key === "2") {
+    store.setSettings({ brush: Number(key) });
+    $("sel-brush").value = key;
+    toast(key === "1" ? "Brush: dot" : "Brush: plus");
   }
 }
 
@@ -444,6 +513,10 @@ function doStep() {
   if (state.pop > state.peak) state.peak = state.pop;
   renderer.pushPop(state.pop);
   if (result.births >= 3) audio.tickBirths(result.births);
+  if (state.mode === "sandbox") {
+    state.gunGens += 1;
+    if (state.gunGens >= 80 && store.unlockAchievement("gunner")) toast("Medal: Gunner");
+  }
   if (state.challenge?.keepAlive && state.cooldown > 0) state.cooldown -= 1;
 
   const h = hashGrid(state.grid);
@@ -501,8 +574,13 @@ function tickDaily(cycled) {
     $("daily-best").textContent = `Best ${best.score}`;
     $("daily-reason").textContent =
       state.pop === 0 ? "Extinct" : cycled ? "Stable" : "400 generation cap";
-    store.unlockAchievement("daily");
+    if (store.unlockAchievement("daily")) toast("Medal: Daily bread");
+    $("daily-end-score").textContent = String(score);
+    $("daily-end-copy").textContent =
+      `peak ${state.peak} · ${state.gen} gens · ${state.pop === 0 ? "extinct" : cycled ? "stable" : "capped"}`;
+    showOverlay("daily-end");
     hudDirty = true;
+    refreshTitle();
   }
 }
 
@@ -518,9 +596,13 @@ function celebrate(gens) {
     lived: gens,
   });
   store.setChallengeStars(state.challenge.id, stars);
-  store.unlockAchievement("first-win");
+  if (store.unlockAchievement("first-win")) toast("Medal: First pulse");
   store.unlockAchievement(state.challenge.id);
+  for (const id of maybeCampaignMedals(store, CHALLENGES)) {
+    toast(id === "perfect" ? "Medal: Perfect pulse" : "Medal: Ten lives");
+  }
   buildChallenges();
+  refreshTitle();
   audio.winChime();
   $("success-title").textContent = `${state.challenge.title} complete`;
   $("success-stars").textContent = starText(stars);
@@ -535,6 +617,76 @@ function failRun(msg) {
   audio.failThud();
   $("fail-copy").textContent = msg;
   showOverlay("fail");
+}
+
+function copyRle() {
+  const text = encodeRle(state.grid, "B3/S23");
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => toast("RLE copied"),
+      () => toast("Could not copy RLE"),
+    );
+  } else toast("Clipboard unavailable");
+}
+
+function copyDailyScore() {
+  const score = $("daily-end-score").textContent;
+  const line = `Life daily ${state.dailyIso}: ${score}`;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(line).then(
+      () => toast("Score copied"),
+      () => toast(line),
+    );
+  } else toast(line);
+}
+
+function applyTheme(id) {
+  const theme = THEMES[id] ? id : "lime";
+  store.setSettings({ theme });
+  renderer.setTheme(theme);
+  document.documentElement.dataset.theme = theme;
+}
+
+function recordsMap() {
+  const records = {};
+  for (const ch of CHALLENGES) records[ch.id] = store.challengeRecord(ch.id);
+  return records;
+}
+
+function refreshTitle() {
+  const records = recordsMap();
+  const stars = starTotal(records, CHALLENGES);
+  $("title-stars").textContent = `${stars}/${CHALLENGES.length * 3}`;
+  const best = store.dailyBest(todayISO());
+  $("title-daily").textContent = best ? String(best.score) : "—";
+  $("title-medals").textContent = String(store.getState().achievements.length);
+}
+
+function openCampaign() {
+  const records = recordsMap();
+  $("campaign-progress").textContent = `${starTotal(records, CHALLENGES)} / ${CHALLENGES.length * 3} stars`;
+  const root = $("campaign-grid");
+  root.innerHTML = "";
+  CHALLENGES.forEach((ch, i) => {
+    const rec = records[ch.id];
+    const open = isUnlocked(i, records, CHALLENGES);
+    const btn = document.createElement("button");
+    btn.className = open ? "" : "locked";
+    btn.disabled = !open;
+    btn.innerHTML = `<span>${i + 1}. ${ch.title}</span><span class="meta">${open ? starText(rec.stars || 0) : "locked"}</span>`;
+    if (open) btn.addEventListener("click", () => { hideOverlay(); openChallenge(ch.id); });
+    root.append(btn);
+  });
+  showOverlay("campaign");
+}
+
+function openMedals() {
+  const have = new Set(store.getState().achievements);
+  $("medals-list").innerHTML = ACHIEVEMENTS.map((a) => {
+    const on = have.has(a.id);
+    return `<li class="${on ? "on" : ""}"><span class="mark">${on ? "●" : "○"}</span><div><strong>${a.name}</strong><small>${a.hint}</small></div></li>`;
+  }).join("");
+  showOverlay("medals");
 }
 
 function copyShare() {
@@ -592,6 +744,8 @@ function openSandbox() {
   placeStampCentered(state.grid, "gosper");
   renderer.target = null;
   undo.length = 0;
+  state.painted = 0;
+  state.gunGens = 0;
   resetRunStats();
   hideOverlay();
   showPlay();
@@ -599,8 +753,7 @@ function openSandbox() {
 }
 
 function openChallenges() {
-  const next = CHALLENGES.find((c) => !store.challengeRecord(c.id).completed) || CHALLENGES[0];
-  openChallenge(next.id);
+  openCampaign();
 }
 
 function openChallenge(id) {
@@ -684,23 +837,32 @@ function goTitle() {
   hideOverlay();
   els.play.classList.add("hidden");
   els.title.classList.remove("hidden");
+  refreshTitle();
 }
 
 function showOverlay(name) {
   state.overlay = name;
-  if (name !== "howto") state.running = false;
-  els.howto.classList.toggle("hidden", name !== "howto");
-  els.pause.classList.toggle("hidden", name !== "pause");
-  els.success.classList.toggle("hidden", name !== "success");
-  els.fail.classList.toggle("hidden", name !== "fail");
+  if (name !== "howto" && name !== "keys") state.running = false;
+  const map = {
+    howto: els.howto,
+    pause: els.pause,
+    success: els.success,
+    fail: els.fail,
+    campaign: els.campaign,
+    medals: els.medals,
+    "daily-end": els.dailyEnd,
+    keys: els.keys,
+  };
+  for (const [key, node] of Object.entries(map)) {
+    node.classList.toggle("hidden", key !== name);
+  }
 }
 
 function hideOverlay() {
   state.overlay = null;
-  els.howto.classList.add("hidden");
-  els.pause.classList.add("hidden");
-  els.success.classList.add("hidden");
-  els.fail.classList.add("hidden");
+  for (const node of [els.howto, els.pause, els.success, els.fail, els.campaign, els.medals, els.dailyEnd, els.keys]) {
+    node.classList.add("hidden");
+  }
 }
 
 function toast(msg) {

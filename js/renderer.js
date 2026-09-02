@@ -1,5 +1,44 @@
 /** Canvas glow cells — lime/cyan on a void. */
 
+export const THEMES = {
+  lime: {
+    void: "#050b14",
+    board: "#07111d",
+    young: "#e8ff7a",
+    mid: "#c6ff4a",
+    old: "#4ad4ff",
+    glow: "rgba(180, 255, 90, 0.65)",
+    spark: "#b8ff4a",
+  },
+  fire: {
+    void: "#140805",
+    board: "#1d0c07",
+    young: "#ffe9a0",
+    mid: "#ff7a2a",
+    old: "#c81e1e",
+    glow: "rgba(255, 120, 40, 0.65)",
+    spark: "#ff8a3a",
+  },
+  ocean: {
+    void: "#041018",
+    board: "#071820",
+    young: "#d4ffff",
+    mid: "#3ee0ff",
+    old: "#3a6cff",
+    glow: "rgba(80, 220, 255, 0.65)",
+    spark: "#5ef0ff",
+  },
+  mono: {
+    void: "#09090b",
+    board: "#121214",
+    young: "#f4f4f0",
+    mid: "#c8c8c2",
+    old: "#7a7a74",
+    glow: "rgba(255, 255, 255, 0.35)",
+    spark: "#e8e8e2",
+  },
+};
+
 export class Renderer {
   constructor(canvas, sparkCanvas) {
     this.canvas = canvas;
@@ -13,6 +52,18 @@ export class Renderer {
     this.target = null;
     this.history = [];
     this.dpr = 1;
+    this.themeId = "lime";
+    this.theme = THEMES.lime;
+    this.ageHeat = true;
+  }
+
+  setTheme(id) {
+    this.themeId = THEMES[id] ? id : "lime";
+    this.theme = THEMES[this.themeId];
+  }
+
+  setAgeHeat(on) {
+    this.ageHeat = Boolean(on);
   }
 
   setReducedMotion(on) {
@@ -90,7 +141,7 @@ export class Renderer {
     const cssW = this.canvas.width / dpr;
     const cssH = this.canvas.height / dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#050b14";
+    ctx.fillStyle = this.theme.void;
     ctx.fillRect(0, 0, cssW, cssH);
 
     const s = this.cam.scale;
@@ -102,7 +153,7 @@ export class Renderer {
     ctx.rect(0, 0, cssW, cssH);
     ctx.clip();
 
-    ctx.fillStyle = "#07111d";
+    ctx.fillStyle = this.theme.board;
     ctx.fillRect(ox, oy, grid.w * s, grid.h * s);
 
     if (s >= 8) {
@@ -145,7 +196,7 @@ export class Renderer {
 
     const glow = !this.reducedMotion && s >= 5;
     if (glow) {
-      ctx.shadowColor = "rgba(180, 255, 90, 0.65)";
+      ctx.shadowColor = this.theme.glow;
       ctx.shadowBlur = Math.min(18, s * 0.7);
     }
 
@@ -161,7 +212,7 @@ export class Renderer {
       for (let x = x0; x < x1; x += 1) {
         if (!cells[row + x]) continue;
         const age = ages[row + x] || 1;
-        ctx.fillStyle = cellColor(age);
+        ctx.fillStyle = cellColor(age, this.theme, this.ageHeat);
         const px = ox + x * s + pad;
         const py = oy + y * s + pad;
         const sz = s - pad * 2;
@@ -204,7 +255,7 @@ export class Renderer {
     if (hist.length < 2) return;
     const max = Math.max(1, ...hist);
     ctx.beginPath();
-    ctx.strokeStyle = "#b8ff4a";
+    ctx.strokeStyle = this.theme.spark;
     ctx.lineWidth = 1.5;
     for (let i = 0; i < hist.length; i += 1) {
       const x = (i / (hist.length - 1)) * (w - 4) + 2;
@@ -227,10 +278,9 @@ function roundCell(ctx, x, y, s, rRatio) {
   else ctx.rect(x, y, s, s);
 }
 
-function cellColor(age) {
-  if (age <= 1) return "#e8ff7a";
-  if (age <= 3) return "#c6ff4a";
-  if (age <= 8) return "#7dffe8";
-  if (age <= 20) return "#4ad4ff";
-  return "#3aa0ff";
+function cellColor(age, theme, ageHeat) {
+  if (!ageHeat) return theme.mid;
+  if (age <= 1) return theme.young;
+  if (age <= 8) return theme.mid;
+  return theme.old;
 }

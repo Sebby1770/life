@@ -6,6 +6,10 @@ const DEFAULTS = {
   settings: {
     mute: false,
     reducedMotion: false,
+    theme: "lime",
+    ageHeat: true,
+    brush: 1,
+    seenHowto: false,
   },
   challenges: {},
   daily: {},

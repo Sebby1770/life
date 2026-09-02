@@ -30,10 +30,11 @@ Cells live and die by **B3/S23**: a dead cell with three neighbors is born; a li
 
 ## Screens
 
-1. **Title** — wordmark over the hero, then Sandbox / Challenges / Daily / How to Play.
-2. **Sandbox** — playground with stamps, wrap, speed, undo, HighLife / Seeds / Day & Night, share links (`location.hash`).
-3. **Challenges** — ten puzzles with budgets, hints, and stars.
+1. **Title** — wordmark over the hero, campaign stars, daily best, medals.
+2. **Sandbox** — playground with stamps, wrap, speed, undo, themes, age-heat, brush, RLE, share links (`location.hash`).
+3. **Challenges** — ten puzzles with sequential unlocks, budgets, hints, and stars.
 4. **Daily** — a 40×24 soup (density 0.32) seeded from today's date. Score = peak population × 10 + generations lived, capped at 400.
+5. **Medals** — first pulse, campaign, perfect 30, daily, gunner, painter.
 
 ### Campaign
 

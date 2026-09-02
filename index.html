@@ -7,6 +7,7 @@
     <title>Life — a game of cells</title>
     <meta name="description" content="Life is a browser game of cells. Paint, survive challenges, and chase a daily soup score." />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@500;700;800&display=swap" rel="stylesheet" />
@@ -24,13 +25,19 @@
           <p class="eyebrow">cellular arcade</p>
           <h1 class="wordmark">Life</h1>
           <p class="tagline">A game of cells</p>
+          <div class="title-stats" id="title-stats">
+            <span>campaign <em id="title-stars">0/30</em></span>
+            <span>daily <em id="title-daily">—</em></span>
+            <span>medals <em id="title-medals">0</em></span>
+          </div>
           <div class="title-actions">
             <button class="primary" id="btn-sandbox">Sandbox</button>
             <button class="primary" id="btn-challenges">Challenges</button>
             <button id="btn-daily">Daily</button>
             <button id="btn-howto">How to Play</button>
+            <button id="btn-medals">Medals</button>
           </div>
-          <p class="credit">Once gol-rs, a terminal toy. Now a game.</p>
+          <p class="credit">Once gol-rs, a terminal toy. Now a game. Press <kbd>?</kbd> for keys.</p>
         </div>
       </div>
     </section>
@@ -72,6 +79,13 @@
               <input id="rng-size" type="range" min="40" max="160" step="8" value="80" />
             </label>
             <button id="btn-share">Copy share link</button>
+            <button id="btn-rle">Copy RLE</button>
+            <label>Brush
+              <select id="sel-brush">
+                <option value="1">dot</option>
+                <option value="2">plus</option>
+              </select>
+            </label>
           </div>
         </aside>
         <div class="stage-col">
@@ -137,6 +151,15 @@
         <p>Mute the ticks, calm the glow, or wipe your stars.</p>
         <div class="toggle-row"><span>Mute audio</span><input id="chk-mute" type="checkbox" /></div>
         <div class="toggle-row"><span>Reduced motion</span><input id="chk-motion" type="checkbox" /></div>
+        <div class="toggle-row"><span>Age heat</span><input id="chk-age" type="checkbox" checked /></div>
+        <label>Theme
+          <select id="sel-theme">
+            <option value="lime">Lime</option>
+            <option value="fire">Fire</option>
+            <option value="ocean">Ocean</option>
+            <option value="mono">Mono</option>
+          </select>
+        </label>
         <div class="sheet-actions">
           <button class="primary" id="btn-resume">Resume</button>
           <button id="btn-howto-from-pause">How to Play</button>
@@ -164,6 +187,54 @@
         <p id="fail-copy">The pattern fizzled.</p>
         <div class="sheet-actions">
           <button class="primary" id="btn-fail-close">Try again</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-campaign" class="overlay hidden" role="dialog" aria-labelledby="campaign-title">
+      <div class="sheet sheet-wide">
+        <h2 id="campaign-title">Campaign</h2>
+        <p class="flavor" id="campaign-progress">0 / 30 stars</p>
+        <div id="campaign-grid" class="campaign-grid"></div>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-campaign-close">Back</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-medals" class="overlay hidden" role="dialog" aria-labelledby="medals-title">
+      <div class="sheet">
+        <h2 id="medals-title">Medals</h2>
+        <ul id="medals-list" class="medals-list"></ul>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-medals-close">Back</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-daily-end" class="overlay hidden" role="dialog">
+      <div class="sheet">
+        <h2>Daily settled</h2>
+        <p class="score-big" id="daily-end-score">0</p>
+        <p id="daily-end-copy">Soup complete.</p>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-daily-end-close">Stay</button>
+          <button id="btn-daily-share">Copy score</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay-keys" class="overlay hidden" role="dialog" aria-labelledby="keys-title">
+      <div class="sheet">
+        <h2 id="keys-title">Keys</h2>
+        <ul>
+          <li><kbd>Space</kbd> pause · <kbd>.</kbd> step · <kbd>U</kbd> undo</li>
+          <li><kbd>N</kbd> next stamp · <kbd>[</kbd> <kbd>]</kbd> speed</li>
+          <li><kbd>1</kbd> / <kbd>2</kbd> brush · <kbd>T</kbd> theme</li>
+          <li><kbd>Esc</kbd> pause / back · <kbd>?</kbd> this list</li>
+        </ul>
+        <div class="sheet-actions">
+          <button class="primary" id="btn-keys-close">Got it</button>
         </div>
       </div>
     </div>
